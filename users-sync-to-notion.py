@@ -1,7 +1,15 @@
-# Imports faculty records into Notion database
-#
+"""
+This script syncs  user records between a MySQL database and a Notion database.
+It performs the following tasks:
+
+1. Fetches user records from MySQL.
+2. Fetches existing records from Notion.
+3. Compares and updates Notion records if changes are detected.
+4. Inserts new records into Notion if they are not already present.
+5. Optionally sends a summary email of the updates made.
+
 # Average Runtime: ~5 mins
-# Jeff Henline - 6/12/24
+"""
 
 import mysql.connector
 import requests
