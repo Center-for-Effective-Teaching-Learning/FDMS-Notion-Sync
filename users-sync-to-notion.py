@@ -49,17 +49,11 @@ notion_database_id = config['notion']['facultydb']
 # SendGrid API key from config.ini
 sendgrid_api_key = config['auth']['sendgrid_api_key']
 
-# Query to fetch records from MySQL
-# Query only includes users who have completed at least one program and who have
-# a @calstatela.edu email address
-query = """
-SELECT DISTINCT users.id, first_name, last_name, email, status, departments.short_name AS department 
-FROM users
-INNER JOIN departments ON departments.id = users.department_id 
-INNER JOIN faculty_program ON users.id = faculty_program.user_id
-WHERE users.email LIKE '%calstatela.edu%'
-"""
-
+# Updated query to fetch records from MySQL
+query = """SELECT DISTINCT users.id, first_name, last_name, email, status, departments.short_name AS department, 
+colleges.short_name AS college FROM users INNER JOIN departments ON departments.id = users.department_id INNER JOIN 
+colleges ON departments.college_id = colleges.id INNER JOIN faculty_program ON users.id = faculty_program.user_id 
+WHERE users.email LIKE '%calstatela.edu%'"""
 
 def fetch_mysql_records():
     conn = mysql.connector.connect(**mysql_config)
@@ -69,7 +63,6 @@ def fetch_mysql_records():
     cursor.close()
     conn.close()
     return records
-
 
 def fetch_notion_records():
     url = f'https://api.notion.com/v1/databases/{notion_database_id}/query'
@@ -98,7 +91,7 @@ def fetch_notion_records():
 
         print(".", end="")
 
-    print(f"Fetched {record_count} records from Notion...")
+    print(f"Fetched {record_count} records from Notion.")
 
     # Check if all records are fetched
     if has_more:
@@ -107,13 +100,11 @@ def fetch_notion_records():
 
     return all_records
 
-
 def get_notion_record_id_by_primary_key(notion_records, record_id):
     for page in notion_records:
         if page['properties']['id']['title'][0]['text']['content'] == str(record_id):
             return page['id']
     return None
-
 
 def update_notion_record(record_id, record):
     url = f'https://api.notion.com/v1/pages/{record_id}'
@@ -159,6 +150,11 @@ def update_notion_record(record_id, record):
                 "name": record['department']
             }
         },
+        "college": {
+            "select": {
+                "name": record['college']
+            }
+        },
         "Status": {
             "select": {
                 "name": record['status']
@@ -172,7 +168,6 @@ def update_notion_record(record_id, record):
 
     response = requests.patch(url, headers=headers, data=json.dumps(data))
     return response.json()
-
 
 def insert_into_notion(record):
     url = 'https://api.notion.com/v1/pages'
@@ -218,6 +213,11 @@ def insert_into_notion(record):
                 "name": record['department']
             }
         },
+        "college": {
+            "select": {
+                "name": record['college']
+            }
+        },
         "Status": {
             "select": {
                 "name": record['status']
@@ -232,7 +232,6 @@ def insert_into_notion(record):
 
     response = requests.post(url, headers=headers, data=json.dumps(data))
     return response.json()
-
 
 def send_summary_email(summary):
     message = Mail(
@@ -276,20 +275,28 @@ def main():
             notion_record = next(page for page in notion_records if page['id'] == notion_record_id)
             notion_properties = notion_record['properties']
 
+            # Handle cases where 'college' or 'department' might be None
+            notion_college = ''
+            notion_department = ''
+            if notion_properties.get('college') and notion_properties['college'].get('select'):
+                notion_college = notion_properties['college']['select'].get('name', '')
+            if notion_properties.get('department') and notion_properties['department'].get('select'):
+                notion_department = notion_properties['department']['select'].get('name', '')
+
             update_needed = (
-                notion_properties['first_name']['rich_text'][0]['text']['content'] != record['first_name'] or
-                notion_properties['last_name']['rich_text'][0]['text']['content'] != record['last_name'] or
-                notion_properties['email']['title'][0]['text']['content'] != record['email'] or
-                notion_properties['department']['select']['name'] != record['department'] or
-                notion_properties['Status']['select']['name'] != record['status']
+                    notion_properties['first_name']['rich_text'][0]['text']['content'] != record['first_name'] or
+                    notion_properties['last_name']['rich_text'][0]['text']['content'] != record['last_name'] or
+                    notion_properties['email']['title'][0]['text']['content'] != record['email'] or
+                    notion_department != record['department'] or
+                    notion_college != record['college'] or
+                    notion_properties['Status']['select']['name'] != record['status']
             )
 
             if update_needed:
-                update_response = update_notion_record(notion_record_id, record)
                 summary.append(f'Updated record with id {record["id"]}: {record}')
                 print(f'Updated record with id {record["id"]}')
                 print(f'Summary of changes: {record}')
-                #print(f'Detailed response: {update_response}')
+                update_notion_record(notion_record_id, record)
         else:
             new_records.append(record)
 
@@ -302,11 +309,10 @@ def main():
             new_records = []
 
     for record in new_records:
-        insert_response = insert_into_notion(record)
         summary.append(f'Inserted record with id {record["id"]}: {record}')
         print(f'Inserted record with id {record["id"]}')
         print(f'Summary of changes: {record}')
-        #print(f'Detailed response: {insert_response}')
+        insert_into_notion(record)
 
     if ENABLE_SENDGRID and summary:
         send_summary_email('\n'.join(summary))
@@ -323,6 +329,7 @@ def main():
     hours, remainder = divmod(duration_in_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     print(f"Script Runtime: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
+
 
 if __name__ == '__main__':
     main()
