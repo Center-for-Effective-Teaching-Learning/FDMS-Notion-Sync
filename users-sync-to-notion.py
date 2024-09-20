@@ -52,8 +52,8 @@ sendgrid_api_key = config['auth']['sendgrid_api_key']
 # Updated query to fetch records from MySQL
 query = """SELECT DISTINCT users.id, first_name, last_name, email, status, departments.short_name AS department, 
 colleges.short_name AS college FROM users INNER JOIN departments ON departments.id = users.department_id INNER JOIN 
-colleges ON departments.college_id = colleges.id INNER JOIN faculty_program ON users.id = faculty_program.user_id 
-WHERE users.email LIKE '%calstatela.edu%'"""
+colleges ON departments.college_id = colleges.id LEFT JOIN faculty_program ON users.id = faculty_program.user_id 
+WHERE users.email LIKE '%calstatela.edu%';"""
 
 def fetch_mysql_records():
     conn = mysql.connector.connect(**mysql_config)
