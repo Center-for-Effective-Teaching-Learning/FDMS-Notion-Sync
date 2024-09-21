@@ -187,7 +187,20 @@ def update_notion_record(record_id, record):
     }
 
     response = requests.patch(url, headers=headers, data=json.dumps(data))
-    return response.json()
+
+    # Add error handling
+    if not response.ok:
+        print(f"\nFailed to update record {record_id}, status code: {response.status_code}")
+        print(f"Response content: {response.text}")
+        # Optionally, you can raise an exception here to stop the script
+        # response.raise_for_status()
+    else:
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            print(f"\nError decoding JSON response for record {record_id}: {e}")
+            print(f"Response content: {response.text}")
+            raise
 
 def insert_into_notion(record):
     url = 'https://api.notion.com/v1/pages'
@@ -260,7 +273,20 @@ def insert_into_notion(record):
     }
 
     response = requests.post(url, headers=headers, data=json.dumps(data))
-    return response.json()
+    
+    # Add error handling
+    if not response.ok:
+        print(f"\nFailed to insert record {record['id']}, status code: {response.status_code}")
+        print(f"Response content: {response.text}")
+        # Optionally, you can raise an exception here
+        # response.raise_for_status()
+    else:
+        try:
+            return response.json()
+        except json.JSONDecodeError as e:
+            print(f"\nError decoding JSON response for record {record['id']}: {e}")
+            print(f"Response content: {response.text}")
+            raise
 
 def send_summary_email(summary):
     message = Mail(
