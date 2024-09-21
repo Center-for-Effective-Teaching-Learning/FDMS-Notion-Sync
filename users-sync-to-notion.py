@@ -1,5 +1,5 @@
 """
-This script syncs  user records between a MySQL database and a Notion database.
+This script syncs user records between a MySQL database and a Notion database.
 It performs the following tasks:
 
 1. Fetches user records from MySQL.
@@ -31,7 +31,7 @@ config = configparser.ConfigParser()
 # Config file for test environment
 # config.read('config.ini')
 
-# Config file for productions
+# Config file for production
 config.read('/home/bitnami/scripts/config.ini')
 
 # MySQL connection details from config.ini
@@ -49,11 +49,28 @@ notion_database_id = config['notion']['facultydb']
 # SendGrid API key from config.ini
 sendgrid_api_key = config['auth']['sendgrid_api_key']
 
-# Updated query to fetch records from MySQL
-query = """SELECT DISTINCT users.id, first_name, last_name, email, status, departments.short_name AS department, 
-colleges.short_name AS college FROM users INNER JOIN departments ON departments.id = users.department_id INNER JOIN 
-colleges ON departments.college_id = colleges.id LEFT JOIN faculty_program ON users.id = faculty_program.user_id 
-WHERE users.email LIKE '%calstatela.edu%';"""
+# Updated query to fetch records from MySQL, including chair_email
+query = """
+SELECT DISTINCT
+    users.id,
+    users.first_name,
+    users.last_name,
+    users.email,
+    users.status,
+    departments.short_name AS department,
+    colleges.short_name AS college,
+    (
+        SELECT GROUP_CONCAT(chair_users.email SEPARATOR ', ')
+        FROM department_chairs dc
+        INNER JOIN users chair_users ON dc.user_id = chair_users.id
+        WHERE dc.department_id = users.department_id
+    ) AS chair_email
+FROM users
+INNER JOIN departments ON departments.id = users.department_id
+INNER JOIN colleges ON departments.college_id = colleges.id
+LEFT JOIN faculty_program ON users.id = faculty_program.user_id
+WHERE users.email LIKE '%calstatela.edu%';
+"""
 
 def fetch_mysql_records():
     conn = mysql.connector.connect(**mysql_config)
@@ -99,12 +116,6 @@ def fetch_notion_records():
         exit(1)
 
     return all_records
-
-def get_notion_record_id_by_primary_key(notion_records, record_id):
-    for page in notion_records:
-        if page['properties']['id']['title'][0]['text']['content'] == str(record_id):
-            return page['id']
-    return None
 
 def update_notion_record(record_id, record):
     url = f'https://api.notion.com/v1/pages/{record_id}'
@@ -159,6 +170,15 @@ def update_notion_record(record_id, record):
             "select": {
                 "name": record['status']
             }
+        },
+        "chair_email": {
+            "rich_text": [
+                {
+                    "text": {
+                        "content": record['chair_email'] if record['chair_email'] else ''
+                    }
+                }
+            ]
         }
     }
 
@@ -222,6 +242,15 @@ def insert_into_notion(record):
             "select": {
                 "name": record['status']
             }
+        },
+        "chair_email": {
+            "rich_text": [
+                {
+                    "text": {
+                        "content": record['chair_email'] if record['chair_email'] else ''
+                    }
+                }
+            ]
         }
     }
 
@@ -248,7 +277,6 @@ def send_summary_email(summary):
     except Exception as e:
         print(f'Error sending email: {e}')
 
-
 def main():
     # Record the start time
     start_time = datetime.now()
@@ -269,6 +297,10 @@ def main():
 
     new_records = []
     for record in mysql_records:
+        # Handle cases where 'chair_email' might be None
+        if 'chair_email' not in record or record['chair_email'] is None:
+            record['chair_email'] = ''
+
         notion_record_id = notion_id_to_record_id.get(str(record['id']))
         if notion_record_id:
             # Check for updates
@@ -283,13 +315,19 @@ def main():
             if notion_properties.get('department') and notion_properties['department'].get('select'):
                 notion_department = notion_properties['department']['select'].get('name', '')
 
+            # Handle cases where 'chair_email' might be missing or empty
+            notion_chair_email = ''
+            if notion_properties.get('chair_email') and notion_properties['chair_email'].get('rich_text'):
+                notion_chair_email = notion_properties['chair_email']['rich_text'][0]['text']['content']
+
             update_needed = (
-                    notion_properties['first_name']['rich_text'][0]['text']['content'] != record['first_name'] or
-                    notion_properties['last_name']['rich_text'][0]['text']['content'] != record['last_name'] or
-                    notion_properties['email']['title'][0]['text']['content'] != record['email'] or
-                    notion_department != record['department'] or
-                    notion_college != record['college'] or
-                    notion_properties['Status']['select']['name'] != record['status']
+                notion_properties['first_name']['rich_text'][0]['text']['content'] != record['first_name'] or
+                notion_properties['last_name']['rich_text'][0]['text']['content'] != record['last_name'] or
+                notion_properties['email']['title'][0]['text']['content'] != record['email'] or
+                notion_department != record['department'] or
+                notion_college != record['college'] or
+                notion_properties['Status']['select']['name'] != record['status'] or
+                notion_chair_email != record['chair_email']
             )
 
             if update_needed:
@@ -329,7 +367,6 @@ def main():
     hours, remainder = divmod(duration_in_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     print(f"Script Runtime: {int(hours)}h {int(minutes)}m {seconds:.2f}s")
-
 
 if __name__ == '__main__':
     main()
