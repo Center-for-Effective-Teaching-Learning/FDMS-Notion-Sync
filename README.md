@@ -8,5 +8,5 @@ These scripts facilitate the synchronization of faculty programming records betw
 2. Fetches existing records from Notion.
 3. Compares records and updates Notion if changes are detected.
 4. Inserts new records into Notion if they are not present.
-5. Optionally sends a summary email of updates.
+5. Optionally sends a summary email of updates
 6. Link records based on Notion relationship
