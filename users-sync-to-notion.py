@@ -203,29 +203,35 @@ def update_notion_record(record_id, record):
         }
     }
     
-    # Only add department select if department is not None
+    # Always include department field - set to None if department is None
     if record['department'] is not None:
         properties["department"] = {
             "select": {
                 "name": record['department']
             }
         }
+    else:
+        properties["department"] = None
     
-    # Only add college select if college is not None
+    # Always include college field - set to None if college is None
     if record['college'] is not None:
         properties["college"] = {
             "select": {
                 "name": record['college']
             }
         }
+    else:
+        properties["college"] = None
     
-    # Only add Status select if status is not None
+    # Always include Status field - set to None if status is None
     if record['status'] is not None:
         properties["Status"] = {
             "select": {
                 "name": record['status']
             }
         }
+    else:
+        properties["Status"] = None
 
     data = {
         "properties": properties
@@ -297,29 +303,35 @@ def insert_into_notion(record):
         }
     }
     
-    # Only add department select if department is not None
+    # Always include department field - set to None if department is None
     if record['department'] is not None:
         properties["department"] = {
             "select": {
                 "name": record['department']
             }
         }
+    else:
+        properties["department"] = None
     
-    # Only add college select if college is not None
+    # Always include college field - set to None if college is None
     if record['college'] is not None:
         properties["college"] = {
             "select": {
                 "name": record['college']
             }
         }
+    else:
+        properties["college"] = None
     
-    # Only add Status select if status is not None
+    # Always include Status field - set to None if status is None
     if record['status'] is not None:
         properties["Status"] = {
             "select": {
                 "name": record['status']
             }
         }
+    else:
+        properties["Status"] = None
 
     data = {
         "parent": {"database_id": notion_database_id},
