@@ -85,6 +85,7 @@ LEFT JOIN
     programs_categories ON programs.id = programs_categories.program_id
 LEFT JOIN 
     categories ON programs_categories.category_id = categories.id
+{where_clause}
 GROUP BY 
     faculty_program.user_id, 
     faculty_program.program_id, 
@@ -102,7 +103,8 @@ def fetch_all_mysql_records():
     try:
         conn = mysql.connector.connect(**mysql_config)
         cursor = conn.cursor(dictionary=True, buffered=True)
-        cursor.execute(query)
+        final_query = query.format(where_clause="")
+        cursor.execute(final_query)
         results = cursor.fetchall()
         return results
     except mysql.connector.Error as err:
@@ -140,8 +142,8 @@ def fetch_unsynced_mysql_records():
         else:
             where_clause = "WHERE faculty_program.synced_to_notion = FALSE"
             
-        # Construct the final query properly - ensure there's a space before WHERE
-        final_query = query.rstrip() + " " + where_clause
+        # Construct the final query with WHERE before GROUP BY
+        final_query = query.format(where_clause=where_clause)
         logging.debug(f"Executing query: {final_query}")
         
         cursor.execute(final_query)
@@ -287,7 +289,7 @@ def fetch_mysql_records():
         else:
             where_clause = ""
             
-        final_query = query.format(where_clause)
+        final_query = query.format(where_clause=where_clause)
         cursor.execute(final_query)
         return cursor.fetchall()
     except mysql.connector.Error as err:
